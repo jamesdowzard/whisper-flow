@@ -67,6 +67,11 @@ jobs:
             --name Rodin \
             --icon Rodin.icns \
             --exclude-module sentry_sdk \
+            --exclude-module torch \
+            --exclude-module torchvision \
+            --exclude-module torchaudio \
+            --exclude-module tensorflow \
+            --exclude-module keras \
             --add-data "src/rodin:rodin" \
             launcher.py
 
