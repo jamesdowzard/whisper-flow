@@ -38,13 +38,12 @@ class Transcriber:
         repo_dir = model_dir / repo_dir_name / "snapshots"
 
         if repo_dir.exists():
-            # Find the snapshot directory (there should be one)
-            snapshots = list(repo_dir.iterdir())
-            if snapshots:
-                snapshot_dir = snapshots[0]
-                # Check if model.bin exists
-                if (snapshot_dir / "model.bin").exists():
-                    return snapshot_dir
+            # Find the snapshot directory (skip macOS metadata files starting with ._)
+            for item in repo_dir.iterdir():
+                if item.is_dir() and not item.name.startswith("._"):
+                    # Check if model.bin exists
+                    if (item / "model.bin").exists():
+                        return item
         return None
 
     def _get_device_and_compute(self) -> tuple[str, str]:
