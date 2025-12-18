@@ -72,6 +72,14 @@ jobs:
             --exclude-module torchaudio \
             --exclude-module tensorflow \
             --exclude-module keras \
+            --exclude-module transformers \
+            --exclude-module scipy \
+            --exclude-module pandas \
+            --exclude-module matplotlib \
+            --exclude-module jax \
+            --exclude-module jaxlib \
+            --exclude-module sklearn \
+            --exclude-module scikit-learn \
             --add-data "src/rodin:rodin" \
             launcher.py
 
