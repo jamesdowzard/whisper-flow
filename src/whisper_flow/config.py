@@ -14,9 +14,13 @@ class HotkeyConfig(BaseModel):
 
     # Default: Cmd+Shift+Space on Mac, Ctrl+Shift+Space on Windows
     modifier1: str = Field(default="cmd" if sys.platform == "darwin" else "ctrl")
-    modifier2: str = Field(default="shift")
+    modifier2: str | None = Field(default="shift")  # Optional second modifier
     key: str = Field(default="space")
-    mode: Literal["hold", "toggle"] = Field(default="hold")  # hold-to-talk or push-to-toggle
+    # Modes:
+    # - hold: Hold hotkey to record, release to stop
+    # - toggle: Press once to start, press again to stop
+    # - wispr: Hold to record OR double-tap for continuous mode (tap to stop)
+    mode: Literal["hold", "toggle", "wispr"] = Field(default="hold")
 
 
 class WhisperConfig(BaseModel):

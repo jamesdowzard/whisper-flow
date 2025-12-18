@@ -19,9 +19,17 @@ whisper-flow [OPTIONS]
 | Option | Values | Description |
 |--------|--------|-------------|
 | `--model` | tiny, base, small, medium, large-v3 | Whisper model size |
-| `--mode` | hold, toggle | Recording mode |
+| `--mode` | hold, toggle, wispr | Recording mode (see below) |
 | `--editor` | none, ollama, openai, anthropic | AI editor provider |
 | `--preset` | default, email, commit, notes, code | AI editing preset |
+
+### Recording Modes
+
+| Mode | Behavior |
+|------|----------|
+| `hold` | Hold hotkey to record, release to stop (default) |
+| `toggle` | Press once to start, press again to stop |
+| `wispr` | Hold to talk OR double-tap for continuous mode (tap to stop) |
 
 ## Testing & Debugging
 

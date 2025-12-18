@@ -33,8 +33,8 @@ def main() -> None:
     )
     parser.add_argument(
         "--mode",
-        choices=["hold", "toggle"],
-        help="Recording mode (hold-to-talk or push-to-toggle)",
+        choices=["hold", "toggle", "wispr"],
+        help="Recording mode (hold, toggle, or wispr - double-tap for continuous)",
     )
     parser.add_argument(
         "--editor",

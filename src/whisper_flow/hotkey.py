@@ -2,6 +2,7 @@
 
 import sys
 import threading
+import time
 from typing import Callable
 
 from pynput import keyboard
@@ -10,7 +11,13 @@ from .config import HotkeyConfig
 
 
 class HotkeyHandler:
-    """Handles global hotkey detection."""
+    """Handles global hotkey detection.
+
+    Supports three modes:
+    - hold: Hold hotkey to record, release to stop
+    - toggle: Press once to start, press again to stop
+    - wispr: Hold to record OR double-tap to enter continuous mode (tap to stop)
+    """
 
     def __init__(
         self,
@@ -26,6 +33,11 @@ class HotkeyHandler:
         self._pressed_keys: set[str] = set()
         self._hotkey_active = False
         self._is_toggled = False  # For toggle mode
+
+        # Double-tap detection for wispr mode
+        self._last_tap_time = 0.0
+        self._double_tap_threshold = 0.4  # seconds
+        self._in_continuous_mode = False
 
     def _normalize_key(self, key) -> str | None:
         """Normalize a key to a string representation."""
@@ -58,11 +70,10 @@ class HotkeyHandler:
 
     def _is_hotkey_pressed(self) -> bool:
         """Check if the configured hotkey combination is pressed."""
-        required = {
-            self.config.modifier1.lower(),
-            self.config.modifier2.lower(),
-            self.config.key.lower(),
-        }
+        required = {self.config.modifier1.lower(), self.config.key.lower()}
+        # Only require modifier2 if it's set
+        if self.config.modifier2:
+            required.add(self.config.modifier2.lower())
         return required.issubset(self._pressed_keys)
 
     def _on_press(self, key) -> None:
@@ -73,6 +84,7 @@ class HotkeyHandler:
 
         if self._is_hotkey_pressed() and not self._hotkey_active:
             self._hotkey_active = True
+            current_time = time.time()
 
             if self.config.mode == "toggle":
                 # Toggle mode: press once to start, press again to stop
@@ -81,6 +93,24 @@ class HotkeyHandler:
                     threading.Thread(target=self.on_activate, daemon=True).start()
                 elif self.on_deactivate:
                     threading.Thread(target=self.on_deactivate, daemon=True).start()
+
+            elif self.config.mode == "wispr":
+                # Wispr mode: hold to talk OR double-tap for continuous
+                if self._in_continuous_mode:
+                    # Already in continuous mode - tap to stop
+                    self._in_continuous_mode = False
+                    if self.on_deactivate:
+                        threading.Thread(target=self.on_deactivate, daemon=True).start()
+                elif current_time - self._last_tap_time < self._double_tap_threshold:
+                    # Double-tap detected - enter continuous mode
+                    self._in_continuous_mode = True
+                    threading.Thread(target=self.on_activate, daemon=True).start()
+                else:
+                    # Single press - start recording (will stop on release)
+                    threading.Thread(target=self.on_activate, daemon=True).start()
+
+                self._last_tap_time = current_time
+
             else:
                 # Hold mode: activate on press
                 threading.Thread(target=self.on_activate, daemon=True).start()
@@ -93,6 +123,13 @@ class HotkeyHandler:
 
         # In hold mode, deactivate when hotkey is released
         if self.config.mode == "hold" and self._hotkey_active:
+            if not self._is_hotkey_pressed():
+                self._hotkey_active = False
+                if self.on_deactivate:
+                    threading.Thread(target=self.on_deactivate, daemon=True).start()
+
+        # In wispr mode, deactivate on release UNLESS in continuous mode
+        if self.config.mode == "wispr" and self._hotkey_active and not self._in_continuous_mode:
             if not self._is_hotkey_pressed():
                 self._hotkey_active = False
                 if self.on_deactivate:
@@ -111,11 +148,21 @@ class HotkeyHandler:
         self._listener.start()
 
         mod1 = "Cmd" if self.config.modifier1 == "cmd" else self.config.modifier1.title()
-        mod2 = self.config.modifier2.title()
         key = self.config.key.title()
-        mode = "hold" if self.config.mode == "hold" else "toggle"
 
-        print(f"Hotkey active: {mod1}+{mod2}+{key} ({mode} mode)")
+        if self.config.modifier2:
+            mod2 = self.config.modifier2.title()
+            hotkey_str = f"{mod1}+{mod2}+{key}"
+        else:
+            hotkey_str = f"{mod1}+{key}"
+
+        mode_desc = {
+            "hold": "hold to talk",
+            "toggle": "tap to toggle",
+            "wispr": "hold to talk, double-tap for continuous",
+        }.get(self.config.mode, self.config.mode)
+
+        print(f"Hotkey active: {hotkey_str} ({mode_desc})")
 
     def stop(self) -> None:
         """Stop listening for hotkeys."""
