@@ -80,6 +80,9 @@ jobs:
             --exclude-module jaxlib \
             --exclude-module sklearn \
             --exclude-module scikit-learn \
+            --exclude-module onnxruntime \
+            --exclude-module onnx \
+            --exclude-module sympy \
             --add-data "src/rodin:rodin" \
             launcher.py
 
