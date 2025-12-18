@@ -17,6 +17,11 @@ def main() -> None:
         help="Run in CLI mode (no menu bar)",
     )
     parser.add_argument(
+        "--overlay",
+        action="store_true",
+        help="Run with floating overlay button (recommended)",
+    )
+    parser.add_argument(
         "--list-devices",
         action="store_true",
         help="List available audio input devices",
@@ -107,10 +112,12 @@ def main() -> None:
         return
 
     # Run appropriate mode
-    if args.cli:
+    if args.overlay:
+        run_overlay_mode(settings)
+    elif args.cli:
         run_cli(settings)
     else:
-        run_gui(settings)
+        run_overlay_mode(settings)  # Default to overlay mode
 
 
 def run_cli(settings) -> None:
@@ -214,6 +221,17 @@ def run_cli(settings) -> None:
     except KeyboardInterrupt:
         print("\nShutting down...")
         hotkey.stop()
+
+
+def run_overlay_mode(settings) -> None:
+    """Run with floating overlay button."""
+    if sys.platform == "darwin":
+        from .ui.overlay import run_overlay
+
+        run_overlay(settings)
+    else:
+        print("Overlay mode only available on macOS, running in CLI mode")
+        run_cli(settings)
 
 
 def run_gui(settings) -> None:

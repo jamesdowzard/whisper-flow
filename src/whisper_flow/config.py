@@ -53,6 +53,7 @@ class AudioConfig(BaseModel):
     sample_rate: int = Field(default=16000)  # Whisper expects 16kHz
     channels: int = Field(default=1)  # Mono
     dtype: str = Field(default="int16")
+    device: int | str | None = Field(default=None)  # None = system default, int = device index, str = device name
 
 
 class UIConfig(BaseModel):

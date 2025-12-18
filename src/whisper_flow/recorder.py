@@ -47,7 +47,20 @@ class AudioRecorder:
         self._is_recording = True
         self._audio_queue = queue.Queue()
 
+        # Resolve device - can be index, name, or None (default)
+        device = self.config.device
+        if isinstance(device, str):
+            # Find device by name
+            for i, dev in enumerate(sd.query_devices()):
+                if device.lower() in dev["name"].lower() and dev["max_input_channels"] > 0:
+                    device = i
+                    break
+            else:
+                print(f"Warning: Device '{self.config.device}' not found, using default")
+                device = None
+
         self._stream = sd.InputStream(
+            device=device,
             samplerate=self.config.sample_rate,
             channels=self.config.channels,
             dtype=self.config.dtype,
