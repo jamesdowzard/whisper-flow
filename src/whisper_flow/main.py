@@ -325,10 +325,12 @@ def run_overlay_mode(settings) -> None:
     """Run with floating overlay button."""
     if sys.platform == "darwin":
         from .ui.overlay import run_overlay
-
+        run_overlay(settings)
+    elif sys.platform == "win32":
+        from .ui.overlay_win import run_overlay
         run_overlay(settings)
     else:
-        print("Overlay mode only available on macOS, running in CLI mode")
+        print("Overlay mode not available on this platform, running in CLI mode")
         run_cli(settings)
 
 
