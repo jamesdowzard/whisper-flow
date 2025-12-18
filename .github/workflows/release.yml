@@ -1,0 +1,305 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., 0.1.0)'
+        required: true
+
+jobs:
+  build-macos:
+    runs-on: macos-14  # ARM64 runner
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+          pip install pyinstaller
+
+      - name: Determine version
+        id: version
+        env:
+          INPUT_VERSION: ${{ github.event.inputs.version }}
+          GIT_REF: ${{ github.ref }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo "version=$INPUT_VERSION" >> $GITHUB_OUTPUT
+          else
+            echo "version=${GIT_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Update version in code
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          sed -i '' "s/APP_VERSION = .*/APP_VERSION = \"$VERSION\"/" src/rodin/config.py
+
+      - name: Import signing certificate
+        if: env.MACOS_CERTIFICATE != ''
+        env:
+          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+          MACOS_CERTIFICATE_PWD: ${{ secrets.MACOS_CERTIFICATE_PWD }}
+          KEYCHAIN_PWD: ${{ secrets.KEYCHAIN_PWD }}
+        run: |
+          echo $MACOS_CERTIFICATE | base64 --decode > certificate.p12
+          security create-keychain -p "$KEYCHAIN_PWD" build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p "$KEYCHAIN_PWD" build.keychain
+          security import certificate.p12 -k build.keychain -P "$MACOS_CERTIFICATE_PWD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PWD" build.keychain
+          rm certificate.p12
+
+      - name: Build with PyInstaller
+        run: |
+          pyinstaller -y --onedir --windowed \
+            --name Rodin \
+            --icon Rodin.icns \
+            --exclude-module sentry_sdk \
+            --add-data "src/rodin:rodin" \
+            launcher.py
+
+      - name: Sign the app
+        if: env.MACOS_CERTIFICATE != ''
+        env:
+          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+          SIGNING_IDENTITY: ${{ secrets.SIGNING_IDENTITY }}
+        run: |
+          codesign --force --deep --sign "$SIGNING_IDENTITY" \
+            --options runtime \
+            --entitlements entitlements.plist \
+            dist/Rodin.app
+
+      - name: Notarize the app
+        if: env.APPLE_ID != ''
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_ID_PWD: ${{ secrets.APPLE_ID_PWD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          # Create a zip for notarization
+          ditto -c -k --keepParent dist/Rodin.app Rodin-notarize.zip
+
+          # Submit for notarization
+          xcrun notarytool submit Rodin-notarize.zip \
+            --apple-id "$APPLE_ID" \
+            --password "$APPLE_ID_PWD" \
+            --team-id "$APPLE_TEAM_ID" \
+            --wait
+
+          # Staple the notarization ticket
+          xcrun stapler staple dist/Rodin.app
+
+          rm Rodin-notarize.zip
+
+      - name: Create DMG
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          # Create a temporary directory for DMG contents
+          mkdir -p dmg-contents
+          cp -R dist/Rodin.app dmg-contents/
+          ln -s /Applications dmg-contents/Applications
+
+          # Create DMG
+          hdiutil create -volname "Rodin" \
+            -srcfolder dmg-contents \
+            -ov -format UDZO \
+            "Rodin-${VERSION}-arm64.dmg"
+
+          rm -rf dmg-contents
+
+      - name: Create ZIP
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          cd dist
+          zip -r "../Rodin-${VERSION}-arm64.zip" Rodin.app
+          cd ..
+
+      - name: Generate SHA256
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          shasum -a 256 "Rodin-${VERSION}-arm64.dmg" > "Rodin-${VERSION}-arm64.dmg.sha256"
+          shasum -a 256 "Rodin-${VERSION}-arm64.zip" > "Rodin-${VERSION}-arm64.zip.sha256"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-arm64
+          path: |
+            Rodin-*.dmg
+            Rodin-*.zip
+            *.sha256
+
+  build-macos-intel:
+    runs-on: macos-13  # Intel runner
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+          pip install pyinstaller
+
+      - name: Determine version
+        id: version
+        env:
+          INPUT_VERSION: ${{ github.event.inputs.version }}
+          GIT_REF: ${{ github.ref }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo "version=$INPUT_VERSION" >> $GITHUB_OUTPUT
+          else
+            echo "version=${GIT_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Update version in code
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          sed -i '' "s/APP_VERSION = .*/APP_VERSION = \"$VERSION\"/" src/rodin/config.py
+
+      - name: Import signing certificate
+        if: env.MACOS_CERTIFICATE != ''
+        env:
+          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+          MACOS_CERTIFICATE_PWD: ${{ secrets.MACOS_CERTIFICATE_PWD }}
+          KEYCHAIN_PWD: ${{ secrets.KEYCHAIN_PWD }}
+        run: |
+          echo $MACOS_CERTIFICATE | base64 --decode > certificate.p12
+          security create-keychain -p "$KEYCHAIN_PWD" build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p "$KEYCHAIN_PWD" build.keychain
+          security import certificate.p12 -k build.keychain -P "$MACOS_CERTIFICATE_PWD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PWD" build.keychain
+          rm certificate.p12
+
+      - name: Build with PyInstaller
+        run: |
+          pyinstaller -y --onedir --windowed \
+            --name Rodin \
+            --icon Rodin.icns \
+            --exclude-module sentry_sdk \
+            --add-data "src/rodin:rodin" \
+            launcher.py
+
+      - name: Sign the app
+        if: env.MACOS_CERTIFICATE != ''
+        env:
+          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+          SIGNING_IDENTITY: ${{ secrets.SIGNING_IDENTITY }}
+        run: |
+          codesign --force --deep --sign "$SIGNING_IDENTITY" \
+            --options runtime \
+            --entitlements entitlements.plist \
+            dist/Rodin.app
+
+      - name: Notarize the app
+        if: env.APPLE_ID != ''
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_ID_PWD: ${{ secrets.APPLE_ID_PWD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          ditto -c -k --keepParent dist/Rodin.app Rodin-notarize.zip
+          xcrun notarytool submit Rodin-notarize.zip \
+            --apple-id "$APPLE_ID" \
+            --password "$APPLE_ID_PWD" \
+            --team-id "$APPLE_TEAM_ID" \
+            --wait
+          xcrun stapler staple dist/Rodin.app
+          rm Rodin-notarize.zip
+
+      - name: Create DMG
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          mkdir -p dmg-contents
+          cp -R dist/Rodin.app dmg-contents/
+          ln -s /Applications dmg-contents/Applications
+          hdiutil create -volname "Rodin" \
+            -srcfolder dmg-contents \
+            -ov -format UDZO \
+            "Rodin-${VERSION}-x86_64.dmg"
+          rm -rf dmg-contents
+
+      - name: Create ZIP
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          cd dist
+          zip -r "../Rodin-${VERSION}-x86_64.zip" Rodin.app
+          cd ..
+
+      - name: Generate SHA256
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          shasum -a 256 "Rodin-${VERSION}-x86_64.dmg" > "Rodin-${VERSION}-x86_64.dmg.sha256"
+          shasum -a 256 "Rodin-${VERSION}-x86_64.zip" > "Rodin-${VERSION}-x86_64.zip.sha256"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-x86_64
+          path: |
+            Rodin-*.dmg
+            Rodin-*.zip
+            *.sha256
+
+  release:
+    needs: [build-macos, build-macos-intel]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Determine version
+        id: version
+        env:
+          GIT_REF: ${{ github.ref }}
+        run: echo "version=${GIT_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Create Release
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        uses: softprops/action-gh-release@v1
+        with:
+          name: Rodin v${{ steps.version.outputs.version }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          files: |
+            artifacts/macos-arm64/*
+            artifacts/macos-x86_64/*

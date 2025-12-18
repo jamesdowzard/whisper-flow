@@ -64,6 +64,7 @@ class AppDelegate(NSObject):
         self.settings = load_settings()
         self.overlay: OverlayWindow | None = None
         self.preferences_window: NSWindow | None = None
+        self.main_window: NSWindow | None = None
         self.status_item = None
 
         return self
@@ -94,6 +95,11 @@ class AppDelegate(NSObject):
             print(f"{APP_NAME}: {stats.total_words:,} words in {stats.total_transcriptions:,} transcriptions")
 
         print(f"{APP_NAME} ready! Cmd+Shift+Space to dictate.")
+
+        # Show the main settings window on launch
+        self._create_main_window()
+        self.main_window.makeKeyAndOrderFront_(None)
+        NSApp.activateIgnoringOtherApps_(True)
 
     def _create_status_bar(self):
         """Create the menu bar status item."""
@@ -135,11 +141,130 @@ class AppDelegate(NSObject):
 
     def showPreferences_(self, sender):
         """Show the preferences window."""
-        if self.preferences_window is None:
-            self._create_preferences_window()
+        # Use main window as preferences
+        if self.main_window:
+            self.main_window.makeKeyAndOrderFront_(None)
+            NSApp.activateIgnoringOtherApps_(True)
 
-        self.preferences_window.makeKeyAndOrderFront_(None)
-        NSApp.activateIgnoringOtherApps_(True)
+    def _create_main_window(self):
+        """Create the main settings window."""
+        width = 480
+        height = 520
+
+        # Center on screen
+        screen = NSScreen.mainScreen()
+        screen_frame = screen.frame()
+        x = (screen_frame.size.width - width) / 2
+        y = (screen_frame.size.height - height) / 2
+
+        # Create window
+        self.main_window = NSWindow.alloc().initWithContentRect_styleMask_backing_defer_(
+            NSMakeRect(x, y, width, height),
+            NSWindowStyleMaskTitled | NSWindowStyleMaskClosable | NSWindowStyleMaskMiniaturizable,
+            NSBackingStoreBuffered,
+            False,
+        )
+        self.main_window.setTitle_(APP_NAME)
+        self.main_window.setReleasedWhenClosed_(False)
+
+        content_view = self.main_window.contentView()
+
+        # Main vertical stack
+        vstack = NSStackView.alloc().initWithFrame_(NSMakeRect(0, 0, width - 40, height - 40))
+        vstack.setOrientation_(NSUserInterfaceLayoutOrientationVertical)
+        vstack.setSpacing_(20)
+        vstack.setAlignment_(1)  # NSLayoutAttributeLeading
+
+        # Header with app name and version
+        header = self._create_header_section()
+        vstack.addArrangedSubview_(header)
+
+        # Stats section
+        stats_section = self._create_stats_section()
+        vstack.addArrangedSubview_(stats_section)
+
+        # Model section
+        model_section = self._create_model_section()
+        vstack.addArrangedSubview_(model_section)
+
+        # Hotkey section
+        hotkey_section = self._create_hotkey_section()
+        vstack.addArrangedSubview_(hotkey_section)
+
+        # AI Editor section
+        editor_section = self._create_editor_section()
+        vstack.addArrangedSubview_(editor_section)
+
+        content_view.addSubview_(vstack)
+
+        # Add constraints
+        vstack.setTranslatesAutoresizingMaskIntoConstraints_(False)
+        NSLayoutConstraint.activateConstraints_([
+            vstack.topAnchor().constraintEqualToAnchor_constant_(content_view.topAnchor(), 24),
+            vstack.leadingAnchor().constraintEqualToAnchor_constant_(content_view.leadingAnchor(), 24),
+            vstack.trailingAnchor().constraintEqualToAnchor_constant_(content_view.trailingAnchor(), -24),
+        ])
+
+    def _create_header_section(self) -> NSView:
+        """Create the header with app name and version."""
+        container = NSView.alloc().initWithFrame_(NSMakeRect(0, 0, 430, 50))
+
+        # App name
+        title = NSTextField.labelWithString_(APP_NAME)
+        title.setFont_(NSFont.boldSystemFontOfSize_(24))
+        title.setFrame_(NSMakeRect(0, 20, 200, 30))
+        container.addSubview_(title)
+
+        # Version
+        version = NSTextField.labelWithString_(f"v{APP_VERSION}")
+        version.setFont_(NSFont.systemFontOfSize_(12))
+        version.setTextColor_(NSColor.secondaryLabelColor())
+        version.setFrame_(NSMakeRect(0, 0, 100, 18))
+        container.addSubview_(version)
+
+        return container
+
+    def _create_stats_section(self) -> NSView:
+        """Create the stats display section."""
+        container = NSView.alloc().initWithFrame_(NSMakeRect(0, 0, 430, 80))
+
+        # Stats box with background
+        stats = self.overlay.stats_db.get_stats() if self.overlay else None
+
+        if stats:
+            # Total words
+            words_label = NSTextField.labelWithString_(f"{stats.total_words:,}")
+            words_label.setFont_(NSFont.monospacedDigitSystemFontOfSize_weight_(36, 0.5))
+            words_label.setFrame_(NSMakeRect(0, 40, 200, 40))
+            container.addSubview_(words_label)
+
+            words_desc = NSTextField.labelWithString_("words dictated")
+            words_desc.setFont_(NSFont.systemFontOfSize_(13))
+            words_desc.setTextColor_(NSColor.secondaryLabelColor())
+            words_desc.setFrame_(NSMakeRect(0, 20, 150, 18))
+            container.addSubview_(words_desc)
+
+            # Transcriptions count
+            count_label = NSTextField.labelWithString_(f"{stats.total_transcriptions:,} transcriptions")
+            count_label.setFont_(NSFont.systemFontOfSize_(12))
+            count_label.setTextColor_(NSColor.tertiaryLabelColor())
+            count_label.setFrame_(NSMakeRect(0, 0, 200, 16))
+            container.addSubview_(count_label)
+        else:
+            # No stats yet
+            no_stats = NSTextField.labelWithString_("No transcriptions yet")
+            no_stats.setFont_(NSFont.systemFontOfSize_(14))
+            no_stats.setTextColor_(NSColor.secondaryLabelColor())
+            no_stats.setFrame_(NSMakeRect(0, 30, 200, 20))
+            container.addSubview_(no_stats)
+
+            hint = NSTextField.labelWithString_("Press Cmd+Shift+Space to start dictating")
+            hint.setFont_(NSFont.systemFontOfSize_(12))
+            hint.setTextColor_(NSColor.tertiaryLabelColor())
+            hint.setFrame_(NSMakeRect(0, 10, 300, 16))
+            container.addSubview_(hint)
+
+        return container
 
     def _create_preferences_window(self):
         """Create the preferences window."""
@@ -321,7 +446,7 @@ class AppDelegate(NSObject):
 def run_app():
     """Run the native Mac app."""
     app = NSApplication.sharedApplication()
-    app.setActivationPolicy_(NSApplicationActivationPolicyAccessory)
+    app.setActivationPolicy_(NSApplicationActivationPolicyRegular)  # Show in Dock
 
     delegate = AppDelegate.alloc().init()
     app.setDelegate_(delegate)
