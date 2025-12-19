@@ -35,3 +35,42 @@ Next steps:
 
 Blockers:
 - Microphone not capturing audio in tests (permission or device issue)
+
+=== Session 2024-12-19 ===
+v0.1.0 Release
+
+Completed:
+- Fixed PyInstaller build with proper module exclusions
+- Fixed code signing (PyInstaller native signing, not codesign --deep)
+- Apple notarization passed (after service cleared up)
+- Created GitHub release: https://github.com/jamesdowzard/rodin/releases/tag/v0.1.0
+- Artifacts: DMG (67MB) and ZIP (227MB) for ARM64
+
+Build notes:
+- Notarization was timing out (30+ min) due to Apple service issues
+- Re-ran workflow after service cleared, completed in ~1 min
+- Release includes signed, notarized, stapled app
+
+Next session:
+- Test floating overlay button (#11)
+- Test microphone permission handling (#13)
+
+=== Session 2024-12-19 (continued) ===
+Overlay Testing
+
+Completed:
+- Tested floating overlay button - appears on right side of screen
+- Fixed button click not responding (added acceptsFirstMouse_ method)
+- Recording animation works - button turns red during recording
+- Hotkey (Cmd+Shift+Space) works for recording
+- Full pipeline tested: record → save → transcribe → "no speech detected"
+
+Issues found and fixed:
+- Button clicks weren't registering on borderless NSWindow
+- Fix: Added acceptsFirstMouse_ to MicButtonView
+- Fix: Added setAcceptsMouseMovedEvents_ to window
+
+Remaining:
+- Accessibility permission prompt (pynput hotkey monitoring needs manual grant)
+- Microphone permission handling (#13)
+- Actual transcription test with real speech

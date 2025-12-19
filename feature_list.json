@@ -106,11 +106,11 @@
       "id": 11,
       "name": "Floating overlay button",
       "description": "Wispr Flow-style floating mic button on screen",
-      "status": "in_progress",
+      "status": "passing",
       "priority": 1,
-      "tested": false,
-      "commit": null,
-      "notes": "Code written in overlay.py, not yet tested. Uses PyObjC for native macOS window."
+      "tested": true,
+      "commit": "9814049",
+      "notes": "Fixed acceptsFirstMouse_ for click handling. Button appears on right side, clickable, hover states work."
     },
     {
       "id": 12,
@@ -136,11 +136,11 @@
       "id": 14,
       "name": "Recording animation",
       "description": "Visual feedback during recording (pulsing icon)",
-      "status": "in_progress",
+      "status": "passing",
       "priority": 3,
-      "tested": false,
-      "commit": null,
-      "notes": "Code in overlay.py, not tested"
+      "tested": true,
+      "commit": "9814049",
+      "notes": "Button turns red during recording. Pulsing animation implemented."
     },
     {
       "id": 15,
