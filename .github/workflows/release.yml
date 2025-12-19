@@ -61,11 +61,16 @@ jobs:
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PWD" build.keychain
           rm certificate.p12
 
-      - name: Build with PyInstaller
+      - name: Build and sign with PyInstaller
+        env:
+          SIGNING_IDENTITY: ${{ secrets.SIGNING_IDENTITY }}
         run: |
+          # PyInstaller handles signing properly (not --deep)
           pyinstaller -y --onedir --windowed \
             --name Rodin \
             --icon Rodin.icns \
+            --codesign-identity "$SIGNING_IDENTITY" \
+            --osx-entitlements-file entitlements.plist \
             --exclude-module sentry_sdk \
             --exclude-module torch \
             --exclude-module torchvision \
@@ -108,14 +113,12 @@ jobs:
             --add-data "src/rodin:rodin" \
             launcher.py
 
-      - name: Sign the app
-        env:
-          SIGNING_IDENTITY: ${{ secrets.SIGNING_IDENTITY }}
+      - name: Verify code signing
         run: |
-          codesign --force --deep --sign "$SIGNING_IDENTITY" \
-            --options runtime \
-            --entitlements entitlements.plist \
-            dist/Rodin.app
+          echo "Verifying code signature..."
+          codesign -vv --strict dist/Rodin.app
+          echo "Checking Gatekeeper acceptance..."
+          spctl -a -v dist/Rodin.app || echo "Note: spctl may fail on CI without full Gatekeeper"
 
       - name: Notarize the app
         env:
